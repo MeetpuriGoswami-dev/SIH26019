@@ -106,7 +106,6 @@ REQUIRED_PACKAGES = {
     "requests":   "requests",
     "pydantic":   "pydantic",
     "shapely":    "shapely",
-    "geopandas":  "geopandas",
     "httpx":      "httpx",
 }
 
