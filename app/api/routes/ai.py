@@ -18,6 +18,8 @@ class AIQueryRequest(BaseModel):
     query: str
     location: Optional[str] = "Gandhinagar"
     context: Optional[Dict[str, Any]] = None
+    api_key: Optional[str] = None
+    provider: Optional[str] = None
 
 
 # ---------------------------------------------------------------------------
@@ -44,6 +46,8 @@ def api_post_grounded_ai_query(
             location_query=payload.location or "Gandhinagar",
             context=payload.context,
             user_role=user.role.value,
+            api_key=payload.api_key,
+            provider=payload.provider,
         )
     except ValueError as ve:
         raise HTTPException(status_code=400, detail=str(ve))
@@ -55,11 +59,14 @@ def api_post_grounded_ai_query(
 def api_get_grounded_ai_query(
     query: str = Query(..., description="Natural language land governance question"),
     location: str = Query(..., description="Indian place name, village, or district"),
+    api_key: Optional[str] = Query(None, description="Optional LLM API key (Gemini, Groq, OpenRouter)"),
+    provider: Optional[str] = Query(None, description="Optional LLM provider (local_rag, groq, gemini, openrouter, ollama)"),
 ):
     """GET convenience endpoint for the grounded AI query engine."""
     try:
-        return query_grounded_ai(user_question=query, location_query=location)
+        return query_grounded_ai(user_question=query, location_query=location, api_key=api_key, provider=provider)
     except ValueError as ve:
         raise HTTPException(status_code=400, detail=str(ve))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+

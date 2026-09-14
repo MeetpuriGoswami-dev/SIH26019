@@ -1937,9 +1937,28 @@ def render_gov_portal_html() -> str:
               <button class="module-toggle-btn" id="aiBtnToggle">Active</button>
             </div>
             <div class="module-content">
-              <div class="assistant-banner">
-                <span>⚖️</span>
-                <span>Bhumi-Niti Legal Decision-Support Assistant | Grounded in Gujarat Land Revenue Code (1879)</span>
+              <div class="assistant-banner" style="display:flex; flex-direction:column; gap:8px;">
+                <div style="display:flex; align-items:center; justify-content:space-between; width:100%;">
+                  <span>⚖️ <strong>Bhumi-Niti Legal Assistant</strong> (Grounded Statutory RAG)</span>
+                  <button class="btn-sec" onclick="event.stopPropagation(); toggleAiProviderSettings();" style="padding:2px 8px; font-size:0.75rem; cursor:pointer;">⚙️ Engine / API Key</button>
+                </div>
+                <div id="aiProviderPanel" style="display:none; background:rgba(15, 23, 42, 0.4); padding:10px; border-radius:6px; border:1px solid rgba(255,255,255,0.1); margin-top:4px;">
+                  <div style="display:flex; gap:8px; align-items:center; margin-bottom:8px; flex-wrap:wrap;">
+                    <label style="font-size:0.75rem; font-weight:600; color:var(--gov-text);">LLM Provider:</label>
+                    <select id="aiProviderSelect" onchange="onAiProviderChange()" style="padding:4px 8px; font-size:0.75rem; border-radius:4px; background:var(--gov-bg-dark); color:var(--gov-text); border:1px solid var(--gov-border);">
+                      <option value="local_rag">⚡ Instant Grounded RAG (Free - No Key Needed)</option>
+                      <option value="groq">🚀 Groq API (Free 70B - Llama 3.3 / Qwen 2.5)</option>
+                      <option value="gemini">♊ Google Gemini Flash (Free AI Studio Key)</option>
+                      <option value="openrouter">🌐 OpenRouter Free Models</option>
+                      <option value="ollama">🦙 Ollama Local (http://localhost:11434)</option>
+                    </select>
+                  </div>
+                  <div id="aiApiKeyRow" style="display:none; gap:6px; align-items:center;">
+                    <input type="password" id="aiApiKeyInput" placeholder="Paste free API Key (Groq / Gemini / OpenRouter)" style="flex:1; padding:4px 8px; font-size:0.75rem; border-radius:4px; background:var(--gov-bg-dark); color:var(--gov-text); border:1px solid var(--gov-border);" />
+                    <button onclick="saveAiApiKey()" style="padding:4px 10px; font-size:0.75rem; background:var(--gov-blue); color:#fff; border:none; border-radius:4px; cursor:pointer;">Save Key</button>
+                  </div>
+                  <div id="aiKeyStatusMsg" style="font-size:0.7rem; color:var(--gov-green); margin-top:4px;"></div>
+                </div>
               </div>
               <div class="chat-messages" id="chatMessages">
                 <div class="chat-msg chat-ai">
@@ -2215,11 +2234,12 @@ def render_gov_portal_html() -> str:
     let debounceTimer = null;
     let currentSuggestions = [];
     let activeSuggestionIndex = -1;
+    const suggestionCache = {};
 
     searchInput.addEventListener('input', (e) => {
       const val = e.target.value.trim();
       clearTimeout(debounceTimer);
-      if (val.length < 3) {
+      if (val.length < 1) {
         suggestionsList.style.display = 'none';
         suggestionsList.innerHTML = '';
         currentSuggestions = [];
@@ -2227,10 +2247,18 @@ def render_gov_portal_html() -> str:
         return;
       }
 
+      const lower = val.toLowerCase();
+      if (suggestionCache[lower]) {
+        currentSuggestions = suggestionCache[lower];
+        renderSuggestions(currentSuggestions);
+        searchSpinner.style.display = 'none';
+        return;
+      }
+
       searchSpinner.style.display = 'block';
       debounceTimer = setTimeout(() => {
         fetchSuggestions(val);
-      }, 300);
+      }, 50);
     });
 
     searchInput.addEventListener('keydown', (e) => {
@@ -2265,11 +2293,20 @@ def render_gov_portal_html() -> str:
     });
 
     async function fetchSuggestions(term) {
+      const lower = term.toLowerCase();
+      if (suggestionCache[lower]) {
+        currentSuggestions = suggestionCache[lower];
+        renderSuggestions(currentSuggestions);
+        searchSpinner.style.display = 'none';
+        return;
+      }
+
       try {
         const res = await fetch(`/api/v1/locations/suggest?q=${encodeURIComponent(term)}`);
         if (!res.ok) throw new Error("Suggestion failed");
         const items = await res.json();
         currentSuggestions = items || [];
+        suggestionCache[lower] = currentSuggestions;
         renderSuggestions(currentSuggestions);
       } catch (err) {
         suggestionsList.style.display = 'none';
@@ -2641,16 +2678,73 @@ def render_gov_portal_html() -> str:
       if (e.key === 'Enter') sendAiQuestion();
     }
 
-    async function sendAiQuestion() {
+    function toggleAiProviderSettings() {
+      const panel = document.getElementById('aiProviderPanel');
+      if (panel) {
+        panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+        initAiProviderSettings();
+      }
+    }
+
+    function initAiProviderSettings() {
+      const sel = document.getElementById('aiProviderSelect');
+      const apiKeyInput = document.getElementById('aiApiKeyInput');
+      const statusMsg = document.getElementById('aiKeyStatusMsg');
+      if (!sel) return;
+
+      const savedProvider = localStorage.getItem('bhuminiti_ai_provider') || 'local_rag';
+      const savedKey = localStorage.getItem('bhuminiti_ai_key') || '';
+      sel.value = savedProvider;
+
+      if (apiKeyInput) apiKeyInput.value = savedKey;
+      onAiProviderChange();
+
+      if (savedKey && statusMsg) {
+        statusMsg.textContent = `✓ Key configured for ${savedProvider.toUpperCase()}`;
+      }
+    }
+
+    function onAiProviderChange() {
+      const sel = document.getElementById('aiProviderSelect');
+      const keyRow = document.getElementById('aiApiKeyRow');
+      if (!sel || !keyRow) return;
+
+      const provider = sel.value;
+      localStorage.setItem('bhuminiti_ai_provider', provider);
+
+      if (['groq', 'gemini', 'openrouter'].includes(provider)) {
+        keyRow.style.display = 'flex';
+      } else {
+        keyRow.style.display = 'none';
+      }
+    }
+
+    function saveAiApiKey() {
+      const apiKeyInput = document.getElementById('aiApiKeyInput');
+      const sel = document.getElementById('aiProviderSelect');
+      const statusMsg = document.getElementById('aiKeyStatusMsg');
+      if (!apiKeyInput || !sel) return;
+
+      const key = apiKeyInput.value.trim();
+      const provider = sel.value;
+      localStorage.setItem('bhuminiti_ai_key', key);
+      localStorage.setItem('bhuminiti_ai_provider', provider);
+
+      if (statusMsg) {
+        statusMsg.textContent = key ? `✓ API Key saved for ${provider.toUpperCase()}` : 'Key cleared (Defaulting to Grounded RAG)';
+      }
+    }
+
+    async function sendAiQuestion(overrideProvider) {
       const input = document.getElementById('aiQuestionInput');
       const q = input.value.trim();
       if (!q) return;
-      if (!currentDossierData) {
-        alert("Please search and select a location first.");
-        return;
+
+      let loc = activeQueryName || "Gandhinagar";
+      if (currentDossierData && currentDossierData.raw_layers && currentDossierData.raw_layers.identity) {
+        loc = currentDossierData.raw_layers.identity.name || loc;
       }
 
-      const loc = activeQueryName || currentDossierData.raw_layers.identity.name;
       const chatBox = document.getElementById('chatMessages');
 
       // Append user message
@@ -2661,23 +2755,44 @@ def render_gov_portal_html() -> str:
       input.value = '';
       chatBox.scrollTop = chatBox.scrollHeight;
 
+      // Clean context payload to prevent circular references & payload bloat
+      let cleanContext = null;
+      if (currentDossierData && currentDossierData.raw_layers) {
+        cleanContext = { raw_layers: currentDossierData.raw_layers };
+      } else if (currentDossierData && currentDossierData.identity) {
+        cleanContext = { raw_layers: currentDossierData };
+      }
+
+      const provider = overrideProvider || localStorage.getItem('bhuminiti_ai_provider') || 'local_rag';
+      const apiKey = localStorage.getItem('bhuminiti_ai_key') || null;
+      const authToken = localStorage.getItem('bhuminiti_token') || null;
+
       // Append loading state
       const aiDiv = document.createElement('div');
       aiDiv.className = 'chat-msg chat-ai';
-      aiDiv.innerHTML = '<em>Consulting statutory land enactments & live spatial layers...</em>';
+      aiDiv.innerHTML = `<em>Consulting statutory land enactments & spatial layers (${provider === 'local_rag' ? 'Instant RAG' : provider.toUpperCase()})...</em>`;
       chatBox.appendChild(aiDiv);
       chatBox.scrollTop = chatBox.scrollHeight;
 
       try {
+        const headers = { 'Content-Type': 'application/json' };
+        if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
+
         const resp = await fetch('/api/v1/ai/query', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ query: q, location: loc, context: currentDossierData })
+          headers: headers,
+          body: JSON.stringify({
+            query: q,
+            location: loc,
+            context: cleanContext,
+            provider: provider,
+            api_key: apiKey
+          })
         });
         const resData = await resp.json();
 
         if (!resp.ok) {
-          aiDiv.innerHTML = `⚠️ ${escapeHtml(resData.detail || 'Failed to generate answer')}`;
+          aiDiv.innerHTML = `⚠️ ${escapeHtml(resData.detail || 'Failed to generate answer')}<br><br><button onclick="sendAiQuestion('local_rag')" style="padding:4px 10px; font-size:0.75rem; background:var(--gov-blue); color:#fff; border:none; border-radius:4px; cursor:pointer;">⚡ Retry with Instant Grounded RAG</button>`;
           return;
         }
 
@@ -2686,11 +2801,16 @@ def render_gov_portal_html() -> str:
           citationsHtml = `<div class="citations-box"><strong>Statutory Citations:</strong> ${escapeHtml(resData.citations.join(' • '))}</div>`;
         }
 
-        let formatted = escapeHtml(resData.answer).replace(/\\*\\*(.*?)\\*\\*/g, '<strong>$1</strong>');
+        let formatted = escapeHtml(resData.answer)
+          .replace(/\\*\\*(.*?)\\*\\*/g, '<strong>$1</strong>')
+          .replace(/### (.*?)\\n/g, '<h4 style="margin:8px 0 4px; color:var(--gov-blue-dark);">$1</h4>')
+          .replace(/#### (.*?)\\n/g, '<h5 style="margin:6px 0 2px; color:var(--gov-text); font-weight:600;">$1</h5>')
+          .replace(/\\n\\n/g, '<br><br>');
+
         aiDiv.innerHTML = formatted + citationsHtml;
 
       } catch (err) {
-        aiDiv.innerHTML = `⚠️ Error: ${escapeHtml(err.message)}`;
+        aiDiv.innerHTML = `⚠️ <strong>Connection Notice:</strong> Unable to connect to backend endpoint (${escapeHtml(err.message)}).<br><br><button onclick="sendAiQuestion('local_rag')" style="padding:4px 10px; font-size:0.75rem; background:var(--gov-blue); color:#fff; border:none; border-radius:4px; cursor:pointer;">⚡ Instant RAG Retry</button>`;
       } finally {
         chatBox.scrollTop = chatBox.scrollHeight;
       }
@@ -2729,12 +2849,22 @@ def render_gov_portal_html() -> str:
     function updateIstClock() {
       const el = document.getElementById('istClock');
       if (!el) return;
-      const now = new Date();
-      const opts = { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false };
-      el.textContent = now.toLocaleDateString('en-IN', opts).replace(',', ' |') + ' IST';
+      try {
+        const now = new Date();
+        const timeStr = now.toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
+        const dateStr = now.toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', year: 'numeric' });
+        el.textContent = `${dateStr} | ${timeStr} IST`;
+      } catch (err) {
+        const now = new Date();
+        el.textContent = now.toTimeString().split(' ')[0] + ' IST';
+      }
     }
-    setInterval(updateIstClock, 1000);
-    updateIstClock();
+    try {
+      setInterval(updateIstClock, 1000);
+      updateIstClock();
+    } catch (e) {
+      console.warn("Clock init exception:", e);
+    }
 
     let currentFontScale = 0; // -1, 0, 1
     function adjustFontSize(delta) {
@@ -2780,8 +2910,16 @@ def render_gov_portal_html() -> str:
     }
 
     // ------------------------------------------------------------------------
-    // 13. Persona Switcher & RBAC Enforcement (Req 17)
-    // ------------------------------------------------------------------------
+    // Expose functions globally for inline HTML event handlers
+    window.quickSearch = quickSearch;
+    window.sendAiQuestion = sendAiQuestion;
+    window.toggleModule = toggleModule;
+    window.toggleAiProviderSettings = toggleAiProviderSettings;
+    window.onAiProviderChange = onAiProviderChange;
+    window.saveAiApiKey = saveAiApiKey;
+    window.runSimulationLive = runSimulationLive;
+    window.exportPolicyBrief = exportPolicyBrief;
+
     document.addEventListener("DOMContentLoaded", () => {
       const savedPersona = localStorage.getItem("bhumi_persona") || "citizen";
       const savedState = localStorage.getItem("bhumi_state") || "gujarat";
@@ -2799,6 +2937,12 @@ def render_gov_portal_html() -> str:
       if (sSel) sSel.value = savedState;
 
       applyPersonaUI(savedPersona);
+      initAiProviderSettings();
+
+      // Auto-load default location so intelligence dossier & AI Assistant are active immediately
+      setTimeout(() => {
+        quickSearch('Sanand, Ahmedabad');
+      }, 400);
     });
 
     function onPersonaChange(role) {

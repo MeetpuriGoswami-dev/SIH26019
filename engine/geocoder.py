@@ -298,6 +298,202 @@ PRESEEDED_LOCATIONS: Dict[str, Dict[str, Any]] = {
                 [70.73, 22.23], [70.88, 22.23], [70.88, 22.38], [70.73, 22.38], [70.73, 22.23]
             ]]
         }
+    },
+    "noida": {
+        "official_name": "New Okhla Industrial Development Authority (NOIDA), Gautam Buddha Nagar, Uttar Pradesh, India",
+        "name": "Noida",
+        "type": "Industrial Hub / SEZ",
+        "lat": 28.5355,
+        "lon": 77.3910,
+        "bbox": [28.45, 28.62, 77.30, 77.48],
+        "exact_area_sqkm": 203.93,
+        "pin_code": "201301",
+        "hierarchy": {
+            "state": "Uttar Pradesh",
+            "district": "Gautam Buddha Nagar",
+            "taluka": "Noida",
+            "village_ward": "Noida Sector 62",
+        },
+        "category": "Industrial Hub",
+        "geojson": {
+            "type": "Polygon",
+            "coordinates": [[
+                [77.30, 28.45], [77.48, 28.45], [77.48, 28.62], [77.30, 28.62], [77.30, 28.45]
+            ]]
+        }
+    },
+    "bhopal": {
+        "official_name": "Bhopal Municipal Corporation, Bhopal, Madhya Pradesh, India",
+        "name": "Bhopal",
+        "type": "Administrative / State Capital",
+        "lat": 23.2599,
+        "lon": 77.4126,
+        "bbox": [23.15, 23.35, 77.30, 77.52],
+        "exact_area_sqkm": 1159.14,
+        "pin_code": "462001",
+        "hierarchy": {
+            "state": "Madhya Pradesh",
+            "district": "Bhopal",
+            "taluka": "Huzur",
+            "village_ward": "Bhopal City",
+        },
+        "category": "City/Urban",
+        "geojson": {
+            "type": "Polygon",
+            "coordinates": [[
+                [77.30, 23.15], [77.52, 23.15], [77.52, 23.35], [77.30, 23.35], [77.30, 23.15]
+            ]]
+        }
+    },
+    "bengaluru": {
+        "official_name": "Bruhat Bengaluru Mahanagara Palike (BBMP), Bengaluru Urban, Karnataka, India",
+        "name": "Bengaluru",
+        "type": "City/Urban / IT Megacity",
+        "lat": 12.9716,
+        "lon": 77.5946,
+        "bbox": [12.85, 13.10, 77.48, 77.72],
+        "exact_area_sqkm": 713.98,
+        "pin_code": "560001",
+        "hierarchy": {
+            "state": "Karnataka",
+            "district": "Bengaluru Urban",
+            "taluka": "Bangalore North",
+            "village_ward": "Bengaluru Corporation",
+        },
+        "category": "City/Urban",
+        "geojson": {
+            "type": "Polygon",
+            "coordinates": [[
+                [77.48, 12.85], [77.72, 12.85], [77.72, 13.10], [77.48, 13.10], [77.48, 12.85]
+            ]]
+        }
+    },
+    "pune": {
+        "official_name": "Pune Municipal Corporation, Pune, Maharashtra, India",
+        "name": "Pune",
+        "type": "City/Urban / IT & Auto Hub",
+        "lat": 18.5204,
+        "lon": 73.8567,
+        "bbox": [18.42, 18.62, 73.75, 73.96],
+        "exact_area_sqkm": 1196.32,
+        "pin_code": "411001",
+        "hierarchy": {
+            "state": "Maharashtra",
+            "district": "Pune",
+            "taluka": "Haveli",
+            "village_ward": "Pune City",
+        },
+        "category": "City/Urban",
+        "geojson": {
+            "type": "Polygon",
+            "coordinates": [[
+                [73.75, 18.42], [73.96, 18.42], [73.96, 18.62], [73.75, 18.62], [73.75, 18.42]
+            ]]
+        }
+    },
+    "jamnagar": {
+        "official_name": "Jamnagar Municipal Corporation, Jamnagar, Gujarat, India",
+        "name": "Jamnagar",
+        "type": "Industrial Hub / Refinery Hub",
+        "lat": 22.4707,
+        "lon": 70.0577,
+        "bbox": [22.40, 22.55, 69.98, 70.12],
+        "exact_area_sqkm": 125.4,
+        "pin_code": "361001",
+        "hierarchy": {"state": "Gujarat", "district": "Jamnagar", "taluka": "Jamnagar", "village_ward": "Jamnagar City"},
+        "category": "Industrial Hub",
+        "geojson": {"type": "Polygon", "coordinates": [[[69.98, 22.40], [70.12, 22.40], [70.12, 22.55], [69.98, 22.55], [69.98, 22.40]]]}
+    },
+    "bhavnagar": {
+        "official_name": "Bhavnagar Municipal Corporation, Bhavnagar, Gujarat, India",
+        "name": "Bhavnagar",
+        "type": "City/Urban / Coastal Hub",
+        "lat": 21.7645,
+        "lon": 72.1519,
+        "bbox": [21.70, 21.83, 72.08, 72.22],
+        "exact_area_sqkm": 108.2,
+        "pin_code": "364001",
+        "hierarchy": {"state": "Gujarat", "district": "Bhavnagar", "taluka": "Bhavnagar", "village_ward": "Bhavnagar City"},
+        "category": "City/Urban",
+        "geojson": {"type": "Polygon", "coordinates": [[[72.08, 21.70], [72.22, 21.70], [72.22, 21.83], [72.08, 21.83], [72.08, 21.70]]]}
+    },
+    "junagadh": {
+        "official_name": "Junagadh Municipal Corporation, Junagadh, Gujarat, India",
+        "name": "Junagadh",
+        "type": "City/Urban / Heritage & Gir Foothills",
+        "lat": 21.5222,
+        "lon": 70.4579,
+        "bbox": [21.46, 21.58, 70.40, 70.52],
+        "exact_area_sqkm": 160.0,
+        "pin_code": "362001",
+        "hierarchy": {"state": "Gujarat", "district": "Junagadh", "taluka": "Junagadh", "village_ward": "Junagadh City"},
+        "category": "City/Urban",
+        "geojson": {"type": "Polygon", "coordinates": [[[70.40, 21.46], [70.52, 21.46], [70.52, 21.58], [70.40, 21.58], [70.40, 21.46]]]}
+    },
+    "anand": {
+        "official_name": "Anand Municipal Corporation, Anand, Gujarat, India",
+        "name": "Anand",
+        "type": "City/Urban / Milk Capital (Amul)",
+        "lat": 22.5645,
+        "lon": 72.9289,
+        "bbox": [22.50, 22.62, 72.86, 72.98],
+        "exact_area_sqkm": 87.5,
+        "pin_code": "388001",
+        "hierarchy": {"state": "Gujarat", "district": "Anand", "taluka": "Anand", "village_ward": "Anand City"},
+        "category": "City/Urban",
+        "geojson": {"type": "Polygon", "coordinates": [[[72.86, 22.50], [72.98, 22.50], [72.98, 22.62], [72.86, 22.62], [72.86, 22.50]]]}
+    },
+    "mehsana": {
+        "official_name": "Mehsana Municipality, Mehsana, Gujarat, India",
+        "name": "Mehsana",
+        "type": "City/Urban / Industrial Belt",
+        "lat": 23.5880,
+        "lon": 72.3693,
+        "bbox": [23.52, 23.64, 72.30, 72.42],
+        "exact_area_sqkm": 94.0,
+        "pin_code": "384001",
+        "hierarchy": {"state": "Gujarat", "district": "Mehsana", "taluka": "Mehsana", "village_ward": "Mehsana City"},
+        "category": "City/Urban",
+        "geojson": {"type": "Polygon", "coordinates": [[[72.30, 23.52], [72.42, 23.52], [72.42, 23.64], [72.30, 23.64], [72.30, 23.52]]]}
+    },
+    "morbi": {
+        "official_name": "Morbi Ceramic Industrial Zone, Morbi, Gujarat, India",
+        "name": "Morbi",
+        "type": "Industrial Hub / Ceramic Cluster",
+        "lat": 22.8173,
+        "lon": 70.8368,
+        "bbox": [22.75, 22.88, 70.76, 70.90],
+        "exact_area_sqkm": 142.0,
+        "pin_code": "363641",
+        "hierarchy": {"state": "Gujarat", "district": "Morbi", "taluka": "Morbi", "village_ward": "Morbi GIDC"},
+        "category": "Industrial Hub",
+        "geojson": {"type": "Polygon", "coordinates": [[[70.76, 22.75], [70.90, 22.75], [70.90, 22.88], [70.76, 22.88], [70.76, 22.75]]]}
+    },
+    "bharuch": {
+        "official_name": "Bharuch GIDC Industrial Area, Bharuch, Gujarat, India",
+        "name": "Bharuch",
+        "type": "Industrial Hub / Chemical Belt",
+        "lat": 21.7051,
+        "lon": 72.9959,
+        "bbox": [21.64, 21.76, 72.92, 73.06],
+        "exact_area_sqkm": 110.0,
+        "pin_code": "392001",
+        "hierarchy": {"state": "Gujarat", "district": "Bharuch", "taluka": "Bharuch", "village_ward": "Bharuch GIDC"},
+        "category": "Industrial Hub",
+        "geojson": {"type": "Polygon", "coordinates": [[[72.92, 21.64], [73.06, 21.64], [73.06, 21.76], [72.92, 21.76], [72.92, 21.64]]]}
+    },
+    "vapi": {
+        "official_name": "Vapi GIDC Industrial Complex, Valsad, Gujarat, India",
+        "name": "Vapi",
+        "type": "Industrial Hub / Chemical SEZ",
+        "lat": 20.3721,
+        "lon": 72.9106,
+        "bbox": [20.30, 20.44, 72.84, 72.98],
+        "exact_area_sqkm": 98.0,
+        "pin_code": "396191",
+        "hierarchy": {"state": "Gujarat", "district": "Valsad", "taluka": "Vapi", "village_ward": "Vapi GIDC"},
+        "category": "Industrial Hub",
+        "geojson": {"type": "Polygon", "coordinates": [[[72.84, 20.30], [72.98, 20.30], [72.98, 20.44], [72.84, 20.44], [72.84, 20.30]]]}
     }
 }
 
@@ -381,7 +577,7 @@ def suggest_locations(query: str, limit: int = 5) -> List[Dict[str, Any]]:
     # Check preseeded catalog first for matching items
     q_low = clean_query.lower()
     for key, p_data in PRESEEDED_LOCATIONS.items():
-        if key in q_low or q_low in key or p_data["name"].lower() in q_low:
+        if key in q_low or q_low in key or p_data["name"].lower() in q_low or any(w in key for w in q_low.split()):
             results.append({
                 "display_name": p_data["official_name"],
                 "name": p_data["name"],
@@ -392,6 +588,12 @@ def suggest_locations(query: str, limit: int = 5) -> List[Dict[str, Any]]:
                 "lon": p_data["lon"],
                 "state": p_data["hierarchy"]["state"],
             })
+
+    # Return instant preseeded matches immediately for fast response
+    if len(results) >= limit or len(clean_query) < 3:
+        results = results[:limit]
+        _SUGGEST_CACHE[cache_key] = {"result": results, "expires": time.time() + _CACHE_TTL}
+        return results
 
     headers = {"User-Agent": "BhumiNiti-NationalGovIntel/2.0 (DoLR, MoRD)"}
     params = {
@@ -404,7 +606,7 @@ def suggest_locations(query: str, limit: int = 5) -> List[Dict[str, Any]]:
 
     try:
         data = _nominatim_get(
-            "https://nominatim.openstreetmap.org/search", params, headers, timeout=5
+            "https://nominatim.openstreetmap.org/search", params, headers, timeout=2
         )
         for item in data:
             lat = float(item.get("lat", 0))
