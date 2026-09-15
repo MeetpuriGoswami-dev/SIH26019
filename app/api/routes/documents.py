@@ -11,6 +11,7 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query, Depends, UploadFile, File, Form
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 from app.core.permissions import (
@@ -226,6 +227,35 @@ def api_list_documents(
     conn.close()
 
     return {"documents": [dict(r) for r in rows], "limit": limit, "offset": offset}
+
+
+@router.get("/documents/{doc_id}/download", summary="Download an authorized document")
+def api_download_document(
+    doc_id: str,
+    user: CurrentUser = Depends(get_current_user_from_token_or_header),
+):
+    """Stream a stored document only to its owner or a privileged reviewer."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT file_path, title, owner_user_id, is_public FROM documents WHERE doc_id = ?",
+        (doc_id,),
+    )
+    row = cursor.fetchone()
+    conn.close()
+
+    if not row:
+        raise HTTPException(status_code=404, detail="Document not found.")
+
+    file_path = row["file_path"]
+    owner_user_id = row["owner_user_id"]
+    is_privileged = user.role in {UserRole.GOV_OFFICIAL, UserRole.ADMINISTRATOR}
+    if not is_privileged and owner_user_id != user.user_id and not row["is_public"]:
+        raise HTTPException(status_code=403, detail="Access denied for this document.")
+    if not file_path or not os.path.isfile(file_path):
+        raise HTTPException(status_code=404, detail="Document file is unavailable.")
+
+    return FileResponse(file_path, filename=f"{row['title']}.bin", media_type="application/octet-stream")
 
 
 @router.get("/documents/jobs/{job_id}", summary="Check document ingestion job status")
