@@ -174,10 +174,16 @@ def init_db():
         full_name TEXT NOT NULL,
         role TEXT NOT NULL DEFAULT 'Public',
         is_approved INTEGER DEFAULT 1,
+        account_status TEXT NOT NULL DEFAULT 'active',
         org_id TEXT,
         created_at TEXT NOT NULL
     )
     """)
+
+    try:
+        cursor.execute("ALTER TABLE users ADD COLUMN account_status TEXT NOT NULL DEFAULT 'active'")
+    except sqlite3.OperationalError:
+        pass
 
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS organizations (

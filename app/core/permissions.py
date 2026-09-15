@@ -67,7 +67,7 @@ def get_current_user_from_token_or_header(
             conn = get_db_connection()
             cursor = conn.cursor()
             cursor.execute(
-                "SELECT id, email, role, org_id FROM users WHERE id = ? LIMIT 1",
+                "SELECT id, email, role, org_id, is_approved, account_status FROM users WHERE id = ? LIMIT 1",
                 (user_id,),
             )
             row = cursor.fetchone()
@@ -77,6 +77,11 @@ def get_current_user_from_token_or_header(
 
         if not row:
             raise HTTPException(status_code=401, detail="User account no longer exists or token is invalid.")
+
+        account_approved = row["is_approved"] if isinstance(row, dict) else row[4]
+        account_status = row["account_status"] if isinstance(row, dict) else row[5]
+        if not account_approved or account_status != "active":
+            raise HTTPException(status_code=403, detail="User account is not active.")
 
         token_email = (payload.get("email") or "").lower()
         db_email = (row["email"] if isinstance(row, dict) else row[1]).lower()

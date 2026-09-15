@@ -54,10 +54,12 @@ def init_postgres_db():
             full_name TEXT NOT NULL,
             role TEXT NOT NULL DEFAULT 'Public',
             is_approved BOOLEAN DEFAULT TRUE,
+            account_status TEXT NOT NULL DEFAULT 'active',
             org_id UUID,
             created_at TIMESTAMPTZ DEFAULT NOW()
         );
         """)
+        cursor.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS account_status TEXT NOT NULL DEFAULT 'active';")
 
         cursor.execute("""
         CREATE TABLE IF NOT EXISTS organizations (

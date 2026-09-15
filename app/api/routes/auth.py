@@ -4,11 +4,12 @@ Handles user registration, login, profile, and role management.
 """
 
 import uuid
+import re
 from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Depends
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, field_validator
 
 from app.core.database import get_db_connection
 from app.core.security import hash_password, verify_password, create_access_token
@@ -31,6 +32,37 @@ class UserRegisterRequest(BaseModel):
     password: str
     full_name: str
     requested_role: Optional[str] = "Public"
+
+    @field_validator("email")
+    @classmethod
+    def validate_email(cls, value: str) -> str:
+        value = value.strip().lower()
+        if not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", value):
+            raise ValueError("A valid email address is required.")
+        return value
+
+    @field_validator("password")
+    @classmethod
+    def validate_password(cls, value: str) -> str:
+        if len(value) < 12 or not re.search(r"[A-Za-z]", value) or not re.search(r"\d", value):
+            raise ValueError("Password must be at least 12 characters and contain letters and numbers.")
+        return value
+
+    @field_validator("full_name")
+    @classmethod
+    def validate_full_name(cls, value: str) -> str:
+        value = value.strip()
+        if not 2 <= len(value) <= 120:
+            raise ValueError("Full name must be between 2 and 120 characters.")
+        return value
+
+    @field_validator("requested_role")
+    @classmethod
+    def validate_role(cls, value: Optional[str]) -> str:
+        normalized = (value or "Public").strip()
+        if normalized not in {role.value for role in UserRole}:
+            raise ValueError("Requested role is not supported.")
+        return normalized
 
 
 class UserLoginRequest(BaseModel):
