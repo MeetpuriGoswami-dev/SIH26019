@@ -43,6 +43,29 @@ class CreateOrganisationRequest(BaseModel):
     type: str  # Ministry | Department | University | NGO | Enterprise
 
 
+def _ensure_project_access(cursor, project_id: str, user: CurrentUser) -> None:
+    """Allow project members and privileged reviewers to access a project."""
+    cursor.execute("SELECT created_by FROM projects WHERE id = ?", (project_id,))
+    project = cursor.fetchone()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found.")
+
+    is_privileged = ROLE_HIERARCHY.get(user.role, 1) >= ROLE_HIERARCHY.get(UserRole.GOV_OFFICIAL, 4)
+    if is_privileged:
+        return
+
+    created_by = project["created_by"] if isinstance(project, dict) else project[0]
+    if created_by == user.user_id:
+        return
+
+    cursor.execute(
+        "SELECT 1 FROM project_members WHERE project_id = ? AND user_id = ? LIMIT 1",
+        (project_id, user.user_id),
+    )
+    if not cursor.fetchone():
+        raise HTTPException(status_code=403, detail="Access denied: you are not a member of this project.")
+
+
 # ---------------------------------------------------------------------------
 # Organisations
 # ---------------------------------------------------------------------------
@@ -129,6 +152,10 @@ def create_project(
         "INSERT INTO projects (id, org_id, name, description, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?)",
         (project_id, payload.org_id, payload.name, payload.description, user.user_id, now),
     )
+    cursor.execute(
+        "INSERT INTO project_members (project_id, user_id, membership_role, created_at) VALUES (?, ?, ?, ?)",
+        (project_id, user.user_id, "owner", now),
+    )
     conn.commit()
     conn.close()
     return {
@@ -199,6 +226,7 @@ def list_comments(
 ):
     conn = get_db_connection()
     cursor = conn.cursor()
+    _ensure_project_access(cursor, project_id, user)
     cursor.execute(
         "SELECT id, user_id, user_name, comment_text, created_at FROM project_comments WHERE project_id = ? ORDER BY created_at ASC",
         (project_id,),
@@ -221,11 +249,7 @@ def add_comment(
     now = datetime.now(timezone.utc).isoformat()
     conn = get_db_connection()
     cursor = conn.cursor()
-
-    cursor.execute("SELECT id FROM projects WHERE id = ?", (project_id,))
-    if not cursor.fetchone():
-        conn.close()
-        raise HTTPException(status_code=404, detail="Project not found.")
+    _ensure_project_access(cursor, project_id, user)
 
     cursor.execute(
         "INSERT INTO project_comments (id, project_id, user_id, user_name, comment_text, created_at) VALUES (?, ?, ?, ?, ?, ?)",

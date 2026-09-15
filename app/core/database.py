@@ -289,6 +289,16 @@ def init_db():
         created_at TEXT NOT NULL
     )
     """)
+
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS project_members (
+        project_id TEXT NOT NULL,
+        user_id TEXT NOT NULL,
+        membership_role TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        PRIMARY KEY (project_id, user_id)
+    )
+    """)
     
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS project_comments (

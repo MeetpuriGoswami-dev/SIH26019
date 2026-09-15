@@ -13,6 +13,7 @@ from app.core.permissions import (
     UserRole,
     get_current_user_from_token_or_header,
     require_role,
+    ROLE_HIERARCHY,
 )
 from app.core.database import get_db_connection
 from engine.simulate import run_policy_simulation
@@ -96,15 +97,19 @@ def api_get_simulation_history(
     """
     conn = get_db_connection()
     cursor = conn.cursor()
+    is_privileged = ROLE_HIERARCHY.get(user.role, 1) >= ROLE_HIERARCHY.get(UserRole.GOV_OFFICIAL, 4)
+    owner_filter = "" if is_privileged else "WHERE user_id = ?"
+    params = [limit, offset] if is_privileged else [user.user_id, limit, offset]
     cursor.execute(
-        """
+        f"""
         SELECT id, user_id, location_name, proposed_use, feasibility_score,
                hard_constraints, created_at
         FROM simulation_runs
+        {owner_filter}
         ORDER BY created_at DESC
         LIMIT ? OFFSET ?
         """,
-        (limit, offset),
+        params,
     )
     rows = cursor.fetchall()
     conn.close()
@@ -134,10 +139,10 @@ def api_get_simulation_by_id(
     """Fetch a specific persisted simulation run by its UUID scenario_id."""
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute(
-        "SELECT * FROM simulation_runs WHERE id = ?",
-        (scenario_id,),
-    )
+    is_privileged = ROLE_HIERARCHY.get(user.role, 1) >= ROLE_HIERARCHY.get(UserRole.GOV_OFFICIAL, 4)
+    owner_filter = "" if is_privileged else " AND user_id = ?"
+    params = [scenario_id] if is_privileged else [scenario_id, user.user_id]
+    cursor.execute(f"SELECT * FROM simulation_runs WHERE id = ?{owner_filter}", params)
     row = cursor.fetchone()
     conn.close()
 
