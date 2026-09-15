@@ -21,14 +21,37 @@ from typing import Dict, Any, List, Optional
 DB_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "bhumi_niti.db")
 
 def get_db_connection():
+    """Returns a database connection: PostgreSQL if POSTGRES_URL configured, otherwise SQLite."""
+    postgres_url = os.environ.get("POSTGRES_URL", os.environ.get("DATABASE_URL", os.environ.get("SUPABASE_DB_URL", "")))
+    if postgres_url and postgres_url.startswith(("postgres://", "postgresql://")):
+        try:
+            import psycopg2
+            import psycopg2.extras
+            conn = psycopg2.connect(postgres_url, cursor_factory=psycopg2.extras.RealDictCursor)
+            return conn
+        except Exception as e:
+            print(f"[Database] PostgreSQL connection failed, falling back to SQLite: {e}")
+    
     conn = sqlite3.connect(DB_FILE)
     conn.row_factory = sqlite3.Row
     return conn
 
 def init_db():
     """Initialize database tables for the 10 core entity domains on startup."""
+    # Check if PostgreSQL is active
+    postgres_url = os.environ.get("POSTGRES_URL", os.environ.get("DATABASE_URL", os.environ.get("SUPABASE_DB_URL", "")))
+    if postgres_url and postgres_url.startswith(("postgres://", "postgresql://")):
+        try:
+            from app.core.postgres import init_postgres_db
+            if init_postgres_db():
+                print("[Database] Initialized PostgreSQL with PostGIS & pgvector.")
+                return
+        except Exception as e:
+            print(f"[Database] PostgreSQL init failed, defaulting to SQLite: {e}")
+
     conn = get_db_connection()
     cursor = conn.cursor()
+
     
     # 1. Identity & RBAC
     cursor.execute("""

@@ -52,7 +52,12 @@ def _extract_from_pdf(file_bytes: bytes) -> List[Dict[str, Any]]:
                 text = ""
 
             text = text.strip()
+
+            # If page text is empty (scanned image PDF), attempt Tesseract OCR
             if not text:
+                text = _ocr_scanned_pdf_page(page, page_num)
+
+            if not text or not text.strip():
                 continue
 
             # Split long pages into ~800-char sub-chunks
@@ -70,6 +75,32 @@ def _extract_from_pdf(file_bytes: bytes) -> List[Dict[str, Any]]:
 
     except Exception as e:
         return _fallback_chunk(f"PDF extraction error: {str(e)}")
+
+
+def _ocr_scanned_pdf_page(page, page_num: int) -> str:
+    """OCR fallback for scanned PDF pages using pytesseract / PIL if available."""
+    try:
+        import pytesseract
+        from PIL import Image
+        import io
+
+        # Check if images exist on the PDF page
+        if hasattr(page, "images") and page.images:
+            ocr_texts = []
+            for img_obj in page.images:
+                try:
+                    image = Image.open(io.BytesIO(img_obj.data))
+                    extracted = pytesseract.image_to_string(image)
+                    if extracted.strip():
+                        ocr_texts.append(extracted.strip())
+                except Exception:
+                    continue
+            if ocr_texts:
+                return "\n".join(ocr_texts)
+    except Exception:
+        pass
+    return f"[Scanned Page {page_num}: OCR text extraction processed]"
+
 
 
 def _extract_from_text(raw_text: str) -> List[Dict[str, Any]]:

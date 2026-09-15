@@ -1937,28 +1937,9 @@ def render_gov_portal_html() -> str:
               <button class="module-toggle-btn" id="aiBtnToggle">Active</button>
             </div>
             <div class="module-content">
-              <div class="assistant-banner" style="display:flex; flex-direction:column; gap:8px;">
-                <div style="display:flex; align-items:center; justify-content:space-between; width:100%;">
-                  <span>⚖️ <strong>Bhumi-Niti Legal Assistant</strong> (Grounded Statutory RAG)</span>
-                  <button class="btn-sec" onclick="event.stopPropagation(); toggleAiProviderSettings();" style="padding:2px 8px; font-size:0.75rem; cursor:pointer;">⚙️ Engine / API Key</button>
-                </div>
-                <div id="aiProviderPanel" style="display:none; background:rgba(15, 23, 42, 0.4); padding:10px; border-radius:6px; border:1px solid rgba(255,255,255,0.1); margin-top:4px;">
-                  <div style="display:flex; gap:8px; align-items:center; margin-bottom:8px; flex-wrap:wrap;">
-                    <label style="font-size:0.75rem; font-weight:600; color:var(--gov-text);">LLM Provider:</label>
-                    <select id="aiProviderSelect" onchange="onAiProviderChange()" style="padding:4px 8px; font-size:0.75rem; border-radius:4px; background:var(--gov-bg-dark); color:var(--gov-text); border:1px solid var(--gov-border);">
-                      <option value="local_rag">⚡ Instant Grounded RAG (Free - No Key Needed)</option>
-                      <option value="groq">🚀 Groq API (Free 70B - Llama 3.3 / Qwen 2.5)</option>
-                      <option value="gemini">♊ Google Gemini Flash (Free AI Studio Key)</option>
-                      <option value="openrouter">🌐 OpenRouter Free Models</option>
-                      <option value="ollama">🦙 Ollama Local (http://localhost:11434)</option>
-                    </select>
-                  </div>
-                  <div id="aiApiKeyRow" style="display:none; gap:6px; align-items:center;">
-                    <input type="password" id="aiApiKeyInput" placeholder="Paste free API Key (Groq / Gemini / OpenRouter)" style="flex:1; padding:4px 8px; font-size:0.75rem; border-radius:4px; background:var(--gov-bg-dark); color:var(--gov-text); border:1px solid var(--gov-border);" />
-                    <button onclick="saveAiApiKey()" style="padding:4px 10px; font-size:0.75rem; background:var(--gov-blue); color:#fff; border:none; border-radius:4px; cursor:pointer;">Save Key</button>
-                  </div>
-                  <div id="aiKeyStatusMsg" style="font-size:0.7rem; color:var(--gov-green); margin-top:4px;"></div>
-                </div>
+              <div class="assistant-banner" style="display:flex; align-items:center; justify-content:space-between; width:100%;">
+                <span>⚖️ <strong>Bhumi-Niti Legal Assistant</strong> (Grounded Statutory & Gemini 2.5 Flash RAG)</span>
+                <span style="font-size:0.72rem; color:var(--gov-green); background:rgba(21,128,61,0.15); padding:2px 8px; border-radius:4px; font-weight:600;">● Active</span>
               </div>
               <div class="chat-messages" id="chatMessages">
                 <div class="chat-msg chat-ai">
@@ -2763,14 +2744,15 @@ def render_gov_portal_html() -> str:
         cleanContext = { raw_layers: currentDossierData };
       }
 
-      const provider = overrideProvider || localStorage.getItem('bhuminiti_ai_provider') || 'local_rag';
-      const apiKey = localStorage.getItem('bhuminiti_ai_key') || null;
+      // Clear any legacy client key overrides so server automatically uses Gemini 2.5 Flash from .env
+      localStorage.removeItem('bhuminiti_ai_provider');
+      localStorage.removeItem('bhuminiti_ai_key');
       const authToken = localStorage.getItem('bhuminiti_token') || null;
 
       // Append loading state
       const aiDiv = document.createElement('div');
       aiDiv.className = 'chat-msg chat-ai';
-      aiDiv.innerHTML = `<em>Consulting statutory land enactments & spatial layers (${provider === 'local_rag' ? 'Instant RAG' : provider.toUpperCase()})...</em>`;
+      aiDiv.innerHTML = `<em>Consulting statutory land enactments & spatial layers (Gemini 2.5 Flash Grounded RAG)...</em>`;
       chatBox.appendChild(aiDiv);
       chatBox.scrollTop = chatBox.scrollHeight;
 
@@ -2784,9 +2766,7 @@ def render_gov_portal_html() -> str:
           body: JSON.stringify({
             query: q,
             location: loc,
-            context: cleanContext,
-            provider: provider,
-            api_key: apiKey
+            context: cleanContext
           })
         });
         const resData = await resp.json();

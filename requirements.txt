@@ -9,3 +9,4 @@ pyproj>=3.5.0
 pytest>=8.0.0
 pypdf>=4.0.0
 python-multipart>=0.0.9
+psycopg2-binary>=2.9.9
