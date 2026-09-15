@@ -6,6 +6,7 @@ and document ingestion job lifecycle management.
 
 import uuid
 import os
+import hashlib
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -20,7 +21,7 @@ from app.core.permissions import (
 )
 from app.core.database import get_db_connection
 from engine.live_gov_kb import get_live_gujarat_repository, synthesize_live_gujarat_document
-from app.services.storage_service import save_uploaded_document
+from app.services.storage_service import save_uploaded_document, compute_checksum
 from app.services.ocr_service import extract_text_from_file
 
 router = APIRouter(prefix="/api/v1", tags=["Document Repository"])
@@ -98,6 +99,10 @@ async def api_upload_document(
         raise HTTPException(status_code=400, detail=f"Unsupported file type: {file.content_type}. Allowed: PDF, TXT, HTML.")
 
     file_bytes = await file.read()
+    if not file_bytes:
+        raise HTTPException(status_code=400, detail="Uploaded document is empty.")
+    if len(file_bytes) > 25 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="Document exceeds the 25 MB upload limit.")
     doc_id = str(uuid.uuid4())
     job_id = str(uuid.uuid4())
     now = datetime.now(timezone.utc).isoformat()
@@ -111,20 +116,20 @@ async def api_upload_document(
     cursor.execute(
         """
         INSERT INTO documents (id, doc_id, title, jurisdiction, issuing_authority, doc_type,
-                               publication_year, source_url, file_path, is_public, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
+                               publication_year, source_url, file_path, checksum, owner_user_id, is_public, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
         """,
         (doc_id, doc_id, title, jurisdiction, issuing_authority, doc_type,
-         publication_year, source_url, file_path, now),
+         publication_year, source_url, file_path, compute_checksum(file_bytes), user.user_id, now),
     )
 
     # Create background ingestion job
     cursor.execute(
         """
         INSERT INTO background_jobs (id, job_type, status, progress_pct, error_log, created_at, updated_at)
-        VALUES (?, 'Doc_Ingestion', 'Pending', 0.0, ?, ?, ?)
+        VALUES (?, 'Doc_Ingestion', 'Pending', 0.0, ?, ?, ?, ?)
         """,
-        (job_id, f"doc_id:{doc_id}", now, now),
+        (job_id, f"doc_id:{doc_id}", user.user_id, now, now),
     )
     conn.commit()
     conn.close()
@@ -138,7 +143,7 @@ async def api_upload_document(
         "document_id": doc_id,
         "job_id": job_id,
         "message": "Document queued for OCR extraction and vector indexing.",
-        "file_path": file_path,
+        "checksum": compute_checksum(file_bytes),
     }
 
 
@@ -231,7 +236,10 @@ def api_get_ingestion_job(
     """Check the status and progress of a background document ingestion job."""
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT * FROM background_jobs WHERE id = ?", (job_id,))
+    is_privileged = user.role in {UserRole.GOV_OFFICIAL, UserRole.ADMINISTRATOR}
+    owner_filter = "" if is_privileged else " AND owner_user_id = ?"
+    params = [job_id] if is_privileged else [job_id, user.user_id]
+    cursor.execute(f"SELECT * FROM background_jobs WHERE id = ?{owner_filter}", params)
     row = cursor.fetchone()
     conn.close()
 

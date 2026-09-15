@@ -127,36 +127,28 @@ def query_live_spatial_footprint(lat: float, lon: float, radius_km: float = 3.5)
     total_pts = sum(counts.values())
     distribution = {}
 
-    # If Overpass had zero points or unclassified only, synthesize dynamic Gujarat agro-climatic baseline
+    # A missing or unusable feed is a data gap, not permission to invent percentages.
     if total_pts == 0 or (total_pts == counts["Unclassified / General Land"]):
-        # Dynamic regional baselines based on Gujarat geographic coordinates
-        if lat < 21.8 and lon > 72.8: # South Gujarat (heavy rainfall & orchards)
-            counts["Agricultural / Farmland"] = 62
-            counts["Forest / Woodland / Protected Area"] = 18
-            counts["Built-up / Residential / Urban"] = 12
-            counts["Water Body / Wetland / Estuary"] = 8
-        elif lon < 71.5 and lat > 22.8: # Kutch / North-West Arid
-            counts["Scrub / Wasteland / Grassland (Vidi)"] = 54
-            counts["Agricultural / Farmland"] = 26
-            counts["Industrial / Infrastructure"] = 12
-            counts["Water Body / Wetland / Estuary"] = 8
-        elif 22.5 <= lat <= 23.5 and 72.2 <= lon <= 73.2: # Ahmedabad / Gandhinagar / Sanand Urban Corridor
-            counts["Built-up / Residential / Urban"] = 52
-            counts["Agricultural / Farmland"] = 34
-            counts["Industrial / Infrastructure"] = 10
-            counts["Water Body / Wetland / Estuary"] = 4
-        elif lat < 22.5 and lon < 72.0: # Saurashtra (Groundnut / Cotton agrarian belt)
-            counts["Agricultural / Farmland"] = 68
-            counts["Scrub / Wasteland / Grassland (Vidi)"] = 14
-            counts["Built-up / Residential / Urban"] = 12
-            counts["Water Body / Wetland / Estuary"] = 6
-        else: # North / Middle Gujarat
-            counts["Agricultural / Farmland"] = 64
-            counts["Built-up / Residential / Urban"] = 18
-            counts["Scrub / Wasteland / Grassland (Vidi)"] = 10
-            counts["Water Body / Wetland / Estuary"] = 8
-        counts["Unclassified / General Land"] = 0
-        total_pts = sum(counts.values())
+        res = {
+            "status": "unavailable",
+            "server": server_used or "Overpass",
+            "features_detected": len(elements),
+            "radius_km": radius_km,
+            "message": "Live land-use coverage is unavailable for this perimeter; no percentages were inferred.",
+            "dominant_land_use": None,
+            "vegetation_cover_pct": None,
+            "agricultural_proportion_pct": None,
+            "water_body_footprint_pct": None,
+            "distribution": {},
+            "forest_ecology": {
+                "is_protected": len(protected_features) > 0,
+                "protected_entities": list(set(protected_features)),
+                "forest_clusters": list(set(forest_types)),
+            },
+            "bbox": [south, west, north, east],
+        }
+        _SPATIAL_CACHE[cache_key] = (now, res)
+        return res
 
     dominant_name = "Agricultural / Farmland"
     highest_count = -1

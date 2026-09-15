@@ -143,6 +143,7 @@ def init_postgres_db():
             source_url TEXT,
             file_path TEXT,
             checksum TEXT,
+            owner_user_id UUID REFERENCES users(id),
             is_public BOOLEAN DEFAULT TRUE,
             created_at TIMESTAMPTZ DEFAULT NOW()
         );
@@ -233,10 +234,14 @@ def init_postgres_db():
             status TEXT NOT NULL DEFAULT 'Pending',
             progress_pct DOUBLE PRECISION DEFAULT 0.0,
             error_log TEXT,
+            owner_user_id UUID REFERENCES users(id),
             created_at TIMESTAMPTZ DEFAULT NOW(),
             updated_at TIMESTAMPTZ DEFAULT NOW()
         );
         """)
+
+        cursor.execute("ALTER TABLE documents ADD COLUMN IF NOT EXISTS owner_user_id UUID REFERENCES users(id);")
+        cursor.execute("ALTER TABLE background_jobs ADD COLUMN IF NOT EXISTS owner_user_id UUID REFERENCES users(id);")
 
         cursor.execute("""
         CREATE TABLE IF NOT EXISTS audit_events (

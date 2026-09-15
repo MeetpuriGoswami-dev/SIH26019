@@ -137,23 +137,9 @@ def run_policy_simulation(
         clearances = hard_constraints_triggered + clearances
 
     # 4. Markov / Cellular Automata 5-Year & 10-Year Land Use Transition Forecast
-    veg_cover = float(spatial.get("vegetation_cover_pct", "20.0%").replace("%", "").strip() or 20.0)
-    urban_conversion_risk_5yr = round(min(95.0, max(15.0, (100.0 - veg_cover) * 0.75 + (100.0 - final_score) * 0.25)), 1)
-    urban_conversion_risk_10yr = round(min(98.0, max(25.0, urban_conversion_risk_5yr * 1.25)), 1)
-    agri_retention_10yr = round(max(2.0, 100.0 - urban_conversion_risk_10yr), 1)
-
     transition_forecast = {
-        "model": "Cellular Automata - Markov Chain Transition v2.1",
-        "5_year_horizon": {
-            "urban_expansion_prob": f"{urban_conversion_risk_5yr}%",
-            "agricultural_retention_prob": f"{round(100.0 - urban_conversion_risk_5yr, 1)}%",
-            "forest_encroachment_risk": "Low" if not forest.get("is_protected") else "CRITICAL",
-        },
-        "10_year_horizon": {
-            "urban_expansion_prob": f"{urban_conversion_risk_10yr}%",
-            "agricultural_retention_prob": f"{agri_retention_10yr}%",
-            "forecasted_dominant_use": "Urban / Built-up Area" if urban_conversion_risk_10yr > 65.0 else "Agricultural Buffer",
-        }
+        "status": "unavailable",
+        "message": "No calibrated land-use transition model is configured for this scenario.",
     }
 
     return {

@@ -245,6 +245,7 @@ def init_db():
         source_url TEXT,
         file_path TEXT,
         checksum TEXT,
+        owner_user_id TEXT,
         is_public INTEGER DEFAULT 1,
         created_at TEXT NOT NULL
     )
@@ -344,10 +345,17 @@ def init_db():
         status TEXT NOT NULL DEFAULT 'Pending',
         progress_pct REAL DEFAULT 0.0,
         error_log TEXT,
+        owner_user_id TEXT,
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL
     )
     """)
+
+    for table, column in (("documents", "owner_user_id"), ("background_jobs", "owner_user_id")):
+        try:
+            cursor.execute(f"ALTER TABLE {table} ADD COLUMN {column} TEXT")
+        except sqlite3.OperationalError:
+            pass
     
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS role_requests (

@@ -12,6 +12,7 @@ Features:
 
 import requests
 import math
+import os
 import time
 import threading
 from typing import Any, Dict, List, Optional
@@ -555,7 +556,7 @@ def compute_exact_area_sqkm(
         lon_km = abs(max_lon - min_lon) * 111.0 * math.cos(math.radians(lat))
         return round(lat_km * lon_km, 2)
 
-    return 12.5  # Default representative radius footprint
+    return None
 
 
 def suggest_locations(query: str, limit: int = 5) -> List[Dict[str, Any]]:
@@ -574,20 +575,21 @@ def suggest_locations(query: str, limit: int = 5) -> List[Dict[str, Any]]:
 
     results = []
 
-    # Check preseeded catalog first for matching items
+    # Demo fixtures are opt-in and never participate in normal execution.
     q_low = clean_query.lower()
-    for key, p_data in PRESEEDED_LOCATIONS.items():
-        if key in q_low or q_low in key or p_data["name"].lower() in q_low or any(w in key for w in q_low.split()):
-            results.append({
-                "display_name": p_data["official_name"],
-                "name": p_data["name"],
-                "osm_id": 999000 + len(results),
-                "type": "administrative",
-                "category": p_data.get("category", "Village/Taluka"),
-                "lat": p_data["lat"],
-                "lon": p_data["lon"],
-                "state": p_data["hierarchy"]["state"],
-            })
+    if os.getenv("DEMO_MODE", "false").strip().lower() in {"1", "true", "yes", "on"}:
+        for key, p_data in PRESEEDED_LOCATIONS.items():
+            if key in q_low or q_low in key or p_data["name"].lower() in q_low or any(w in key for w in q_low.split()):
+                results.append({
+                    "display_name": p_data["official_name"],
+                    "name": p_data["name"],
+                    "osm_id": 999000 + len(results),
+                    "type": "administrative",
+                    "category": p_data.get("category", "Village/Taluka"),
+                    "lat": p_data["lat"],
+                    "lon": p_data["lon"],
+                    "state": p_data["hierarchy"]["state"],
+                })
 
     # Return instant preseeded matches immediately for fast response
     if len(results) >= limit or len(clean_query) < 3:
