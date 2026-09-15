@@ -651,9 +651,8 @@ def suggest_locations(query: str, limit: int = 5) -> List[Dict[str, Any]]:
 
 def resolve_location(query: str) -> Dict[str, Any]:
     """
-    Geocodes any Indian location across all 36 States & UTs via Nominatim / Pre-seeded Catalog.
-    Returns complete geographical identity, EPSG:7755 area, and GeoJSON boundary.
-    Never fails or throws unhandled exceptions; provides robust fallbacks.
+    Resolve Indian location names against live Nominatim results and canonical persisted records.
+    Synthetic benchmark fixtures are not treated as authoritative administrative resolution.
     """
     clean_query = query.strip()
     if not clean_query:
@@ -664,26 +663,6 @@ def resolve_location(query: str) -> Dict[str, Any]:
     if entry and time.time() < entry["expires"]:
         return entry["result"]
 
-    # 1. Check pre-seeded benchmark locations catalog
-    for key, p_data in PRESEEDED_LOCATIONS.items():
-        if key in cache_key or cache_key in key or p_data["name"].lower() in cache_key:
-            res_obj = {
-                "official_name": p_data["official_name"],
-                "name": p_data["name"],
-                "type": p_data["type"],
-                "lat": p_data["lat"],
-                "lon": p_data["lon"],
-                "bbox": p_data["bbox"],
-                "exact_area_sqkm": p_data["exact_area_sqkm"],
-                "pin_code": p_data["pin_code"],
-                "hierarchy": p_data["hierarchy"],
-                "geojson": p_data["geojson"],
-                "coverage_status": "National Coverage Active (Pre-indexed Datum)",
-            }
-            _RESOLVE_CACHE[cache_key] = {"result": res_obj, "expires": time.time() + _CACHE_TTL}
-            return res_obj
-
-    # 2. Live Nominatim Query
     headers = {"User-Agent": "BhumiNiti-NationalGovIntel/2.0 (DoLR, MoRD)"}
     params = {
         "q": (
@@ -707,7 +686,7 @@ def resolve_location(query: str) -> Dict[str, Any]:
         lon = float(item.get("lon", 0))
         addr = item.get("address", {})
 
-        state = addr.get("state", "Gujarat")
+        state = addr.get("state") or "India"
         district = (
             addr.get("state_district")
             or addr.get("county")
@@ -732,7 +711,7 @@ def resolve_location(query: str) -> Dict[str, Any]:
             or item.get("name")
             or clean_query
         )
-        pin_code = addr.get("postcode") or "380001"
+        pin_code = addr.get("postcode") or None
 
         bbox = item.get("boundingbox", [lat - 0.05, lat + 0.05, lon - 0.05, lon + 0.05])
         bbox_float = [float(b) for b in bbox]
@@ -740,6 +719,9 @@ def resolve_location(query: str) -> Dict[str, Any]:
         exact_area_sqkm = compute_exact_area_sqkm(geojson, bbox_float, lat, lon)
 
         result = {
+            "status": "resolved",
+            "source_type": "live_nominatim",
+            "source_classification": "live_source_result",
             "official_name": item.get("display_name", f"{clean_query}, {state}, India"),
             "name": item.get("name") or clean_query,
             "type": f"{item.get('type', 'administrative').capitalize()} / Land Revenue Unit",
@@ -755,45 +737,35 @@ def resolve_location(query: str) -> Dict[str, Any]:
                 "village_ward": village_ward,
             },
             "geojson": geojson,
-            "coverage_status": "National Coverage Active",
+            "coverage_status": "Available",
+            "message": "Resolved from live Nominatim source.",
         }
 
         _RESOLVE_CACHE[cache_key] = {"result": result, "expires": time.time() + _CACHE_TTL}
         return result
 
-    # 3. Robust Fallback (if Nominatim rate limits or offline)
-    # Generates valid spatial representation for any Indian location query
-    default_lat, default_lon = 22.2587, 71.1924
-    bbox_float = [default_lat - 0.08, default_lat + 0.08, default_lon - 0.08, default_lon + 0.08]
-    fallback_poly = {
-        "type": "Polygon",
-        "coordinates": [[
-            [default_lon - 0.08, default_lat - 0.08],
-            [default_lon + 0.08, default_lat - 0.08],
-            [default_lon + 0.08, default_lat + 0.08],
-            [default_lon - 0.08, default_lat + 0.08],
-            [default_lon - 0.08, default_lat - 0.08]
-        ]]
-    }
-
-    fallback_result = {
-        "official_name": f"{clean_query}, Gujarat, India",
+    unresolved_result = {
+        "status": "unresolved",
+        "source_type": "unresolved",
+        "source_classification": "unavailable",
+        "official_name": None,
         "name": clean_query,
-        "type": "Land Revenue & Administrative Unit",
-        "lat": default_lat,
-        "lon": default_lon,
-        "bbox": bbox_float,
-        "exact_area_sqkm": 145.2,
-        "pin_code": "380001",
+        "type": None,
+        "lat": None,
+        "lon": None,
+        "bbox": None,
+        "exact_area_sqkm": None,
+        "pin_code": None,
         "hierarchy": {
-            "state": "Gujarat",
-            "district": "Ahmedabad",
-            "taluka": "Central Taluka",
-            "village_ward": clean_query,
+            "state": None,
+            "district": None,
+            "taluka": None,
+            "village_ward": None,
         },
-        "geojson": fallback_poly,
-        "coverage_status": "National Coverage Active (Autonomous Baseline)",
+        "geojson": None,
+        "coverage_status": "Unavailable",
+        "message": "Location could not be resolved from authoritative live sources or approved canonical records.",
     }
 
-    _RESOLVE_CACHE[cache_key] = {"result": fallback_result, "expires": time.time() + _CACHE_TTL}
-    return fallback_result
+    _RESOLVE_CACHE[cache_key] = {"result": unresolved_result, "expires": time.time() + _CACHE_TTL}
+    return unresolved_result

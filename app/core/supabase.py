@@ -11,7 +11,7 @@ import urllib.parse
 from typing import Dict, Any, List, Optional
 from datetime import datetime, timezone
 
-SUPABASE_URL = os.environ.get("SUPABASE_URL", "https://zmdecwnywqfnpkmltoft.supabase.co").rstrip("/")
+SUPABASE_URL = os.environ.get("SUPABASE_URL", "").rstrip("/")
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY", os.environ.get("SUPABASE_ANON_KEY", ""))
 SUPABASE_SERVICE_ROLE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
 
@@ -35,7 +35,7 @@ def get_supabase_headers(use_service_role: bool = False) -> Dict[str, str]:
 def supabase_postgis_migration_sql() -> str:
     """
     SQL migration DDL for Supabase PostgreSQL:
-    Enables PostGIS & pgvector extensions and creates all 13 Bhumi-Niti schema tables.
+    Enables PostGIS & pgvector extensions and creates the complete blueprint schema.
     """
     return """
 -- ============================================================================
@@ -66,6 +66,26 @@ CREATE TABLE IF NOT EXISTS public.organizations (
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS public.role_requests (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+    requested_role TEXT NOT NULL,
+    justification TEXT,
+    status TEXT NOT NULL DEFAULT 'Pending',
+    reviewer_user_id UUID REFERENCES public.users(id),
+    reviewed_at TIMESTAMPTZ,
+    decision_note TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.organization_members (
+    organization_id UUID NOT NULL REFERENCES public.organizations(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+    membership_role TEXT NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    PRIMARY KEY (organization_id, user_id)
+);
+
 -- 3. Canonical Locations & PostGIS Boundaries
 CREATE TABLE IF NOT EXISTS public.canonical_locations (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -80,7 +100,51 @@ CREATE TABLE IF NOT EXISTS public.canonical_locations (
     geojson JSONB,
     geom GEOMETRY(Geometry, 4326),
     area_sqkm DOUBLE PRECISION,
+    source_name TEXT,
+    source_id TEXT,
+    source_url TEXT,
+    source_classification TEXT DEFAULT 'authoritative',
+    canonical_parent_id UUID,
+    aliases_json JSONB DEFAULT '[]'::jsonb,
+    metadata_json JSONB DEFAULT '{}'::jsonb,
+    is_authoritative BOOLEAN DEFAULT TRUE,
+    verified_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.sources (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    name TEXT NOT NULL,
+    source_type TEXT NOT NULL,
+    authority TEXT,
+    base_url TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.source_snapshots (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    source_id UUID NOT NULL REFERENCES public.sources(id) ON DELETE CASCADE,
+    retrieved_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    source_url TEXT NOT NULL,
+    checksum TEXT NOT NULL,
+    content_type TEXT,
+    storage_uri TEXT,
+    metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+    UNIQUE (source_id, checksum)
+);
+
+CREATE TABLE IF NOT EXISTS public.boundary_versions (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    location_id UUID NOT NULL REFERENCES public.canonical_locations(id) ON DELETE CASCADE,
+    source_snapshot_id UUID REFERENCES public.source_snapshots(id),
+    version_number INT NOT NULL,
+    valid_from DATE,
+    valid_to DATE,
+    geom GEOMETRY(Geometry, 4326) NOT NULL,
+    area_sqkm DOUBLE PRECISION,
+    checksum TEXT NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE (location_id, version_number)
 );
 
 -- Spatial index for PostGIS queries
@@ -127,6 +191,17 @@ CREATE TABLE IF NOT EXISTS public.document_chunks (
     embedding VECTOR(1536)
 );
 
+CREATE TABLE IF NOT EXISTS public.document_versions (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    document_id UUID NOT NULL REFERENCES public.documents(id) ON DELETE CASCADE,
+    version_number INT NOT NULL,
+    source_snapshot_id UUID REFERENCES public.source_snapshots(id),
+    checksum TEXT NOT NULL,
+    storage_uri TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE (document_id, version_number)
+);
+
 -- Vector HNSW Index for ultra-fast semantic similarity search
 CREATE INDEX IF NOT EXISTS idx_document_chunks_embedding ON public.document_chunks USING hnsw (embedding vector_cosine_ops);
 
@@ -151,6 +226,59 @@ CREATE TABLE IF NOT EXISTS public.projects (
     name TEXT NOT NULL,
     description TEXT,
     created_by UUID NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.project_members (
+    project_id UUID NOT NULL REFERENCES public.projects(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+    membership_role TEXT NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    PRIMARY KEY (project_id, user_id)
+);
+
+CREATE TABLE IF NOT EXISTS public.annotations (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    project_id UUID NOT NULL REFERENCES public.projects(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES public.users(id),
+    location_id UUID REFERENCES public.canonical_locations(id),
+    body TEXT NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.tasks (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    project_id UUID NOT NULL REFERENCES public.projects(id) ON DELETE CASCADE,
+    assignee_user_id UUID REFERENCES public.users(id),
+    title TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'open',
+    due_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.project_milestones (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    project_id UUID NOT NULL REFERENCES public.projects(id) ON DELETE CASCADE,
+    title TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'planned',
+    due_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.collections (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE (user_id, name)
+);
+
+CREATE TABLE IF NOT EXISTS public.saved_maps (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    collection_id UUID REFERENCES public.collections(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    map_state JSONB NOT NULL,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -184,6 +312,139 @@ CREATE TABLE IF NOT EXISTS public.innovation_submissions (
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS public.innovation_teams (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    challenge_id UUID NOT NULL REFERENCES public.innovation_challenges(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    lead_user_id UUID REFERENCES public.users(id),
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE (challenge_id, name)
+);
+
+CREATE TABLE IF NOT EXISTS public.innovation_team_members (
+    team_id UUID NOT NULL REFERENCES public.innovation_teams(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+    member_role TEXT NOT NULL DEFAULT 'member',
+    PRIMARY KEY (team_id, user_id)
+);
+
+CREATE TABLE IF NOT EXISTS public.submission_versions (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    submission_id UUID NOT NULL REFERENCES public.innovation_submissions(id) ON DELETE CASCADE,
+    version_number INT NOT NULL,
+    proposal_summary TEXT NOT NULL,
+    submitted_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE (submission_id, version_number)
+);
+
+CREATE TABLE IF NOT EXISTS public.innovation_reviews (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    submission_id UUID NOT NULL REFERENCES public.innovation_submissions(id) ON DELETE CASCADE,
+    reviewer_user_id UUID NOT NULL REFERENCES public.users(id),
+    score DOUBLE PRECISION NOT NULL CHECK (score >= 0 AND score <= 100),
+    decision TEXT NOT NULL,
+    notes TEXT,
+    reviewed_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE (submission_id, reviewer_user_id)
+);
+
+CREATE TABLE IF NOT EXISTS public.pilots (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    submission_id UUID NOT NULL REFERENCES public.innovation_submissions(id),
+    sponsor_org_id UUID REFERENCES public.organizations(id),
+    status TEXT NOT NULL DEFAULT 'planned',
+    started_at TIMESTAMPTZ,
+    completed_at TIMESTAMPTZ
+);
+
+CREATE TABLE IF NOT EXISTS public.pilot_milestones (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    pilot_id UUID NOT NULL REFERENCES public.pilots(id) ON DELETE CASCADE,
+    title TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'planned',
+    due_at TIMESTAMPTZ,
+    completed_at TIMESTAMPTZ
+);
+
+CREATE TABLE IF NOT EXISTS public.datasets (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    name TEXT NOT NULL,
+    description TEXT,
+    source_id UUID REFERENCES public.sources(id),
+    owner_user_id UUID REFERENCES public.users(id),
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.dataset_versions (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    dataset_id UUID NOT NULL REFERENCES public.datasets(id) ON DELETE CASCADE,
+    version_number INT NOT NULL,
+    source_snapshot_id UUID REFERENCES public.source_snapshots(id),
+    schema_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+    checksum TEXT NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE (dataset_id, version_number)
+);
+
+CREATE TABLE IF NOT EXISTS public.gis_layers (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    name TEXT NOT NULL,
+    layer_type TEXT NOT NULL,
+    owner_user_id UUID REFERENCES public.users(id),
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.gis_layer_versions (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    layer_id UUID NOT NULL REFERENCES public.gis_layers(id) ON DELETE CASCADE,
+    version_number INT NOT NULL,
+    dataset_version_id UUID REFERENCES public.dataset_versions(id),
+    source_snapshot_id UUID REFERENCES public.source_snapshots(id),
+    style_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE (layer_id, version_number)
+);
+
+CREATE TABLE IF NOT EXISTS public.indicator_definitions (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    code TEXT UNIQUE NOT NULL,
+    name TEXT NOT NULL,
+    unit TEXT,
+    methodology TEXT NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.indicator_observations (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    indicator_id UUID NOT NULL REFERENCES public.indicator_definitions(id) ON DELETE CASCADE,
+    location_id UUID REFERENCES public.canonical_locations(id),
+    dataset_version_id UUID REFERENCES public.dataset_versions(id),
+    observed_at TIMESTAMPTZ NOT NULL,
+    value DOUBLE PRECISION NOT NULL,
+    quality_status TEXT NOT NULL DEFAULT 'unverified',
+    UNIQUE (indicator_id, location_id, observed_at)
+);
+
+CREATE TABLE IF NOT EXISTS public.simulation_model_versions (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    model_name TEXT NOT NULL,
+    version TEXT NOT NULL,
+    parameters JSONB NOT NULL DEFAULT '{}'::jsonb,
+    published_at TIMESTAMPTZ,
+    UNIQUE (model_name, version)
+);
+
+CREATE TABLE IF NOT EXISTS public.exports (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    requested_by UUID NOT NULL REFERENCES public.users(id),
+    export_type TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'queued',
+    storage_uri TEXT,
+    checksum TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    completed_at TIMESTAMPTZ
+);
+
 -- 9. Background Jobs & System Audit Trail
 CREATE TABLE IF NOT EXISTS public.background_jobs (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -203,6 +464,10 @@ CREATE TABLE IF NOT EXISTS public.audit_events (
     ip_address TEXT,
     timestamp TIMESTAMPTZ DEFAULT NOW()
 );
+
+CREATE INDEX IF NOT EXISTS idx_boundary_versions_geom ON public.boundary_versions USING GIST (geom);
+CREATE INDEX IF NOT EXISTS idx_indicator_observations_location ON public.indicator_observations (location_id, observed_at);
+CREATE INDEX IF NOT EXISTS idx_audit_events_resource ON public.audit_events (resource, timestamp);
 
 -- 10. Vector Similarity Search Function for RAG
 CREATE OR REPLACE FUNCTION match_document_chunks (

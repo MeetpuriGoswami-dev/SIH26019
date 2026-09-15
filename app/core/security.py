@@ -1,67 +1,65 @@
 """
 BHUMI-NITI: Authentication & JWT Token Management
 """
+from __future__ import annotations
+
 from datetime import datetime, timedelta, timezone
 from typing import Optional, Dict, Any
-import hashlib
-import hmac
+
+import jwt
+from argon2 import PasswordHasher
+from argon2.exceptions import InvalidHashError, VerificationError, VerifyMismatchError
 
 from app.core.config import settings
 
+_password_hasher = PasswordHasher()
+
+
 def hash_password(password: str) -> str:
-    """Generate SHA256 HMAC hash for user password."""
-    return hmac.new(settings.SECRET_KEY.encode('utf-8'), password.encode('utf-8'), hashlib.sha256).hexdigest()
+    """Hash a user password using Argon2id."""
+    return _password_hasher.hash(password)
+
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    """Verify plain password against stored hash."""
-    return hmac.compare_digest(hash_password(plain_password), hashed_password)
+    """Verify a password against an Argon2id hash only."""
+    if not hashed_password:
+        return False
+
+    try:
+        return _password_hasher.verify(hashed_password, plain_password)
+    except (InvalidHashError, VerificationError, VerifyMismatchError, TypeError, ValueError):
+        return False
+
 
 def create_access_token(data: Dict[str, Any], expires_delta: Optional[timedelta] = None) -> str:
-    """Simple, zero-external-dependency signed token encoder for local/dev fallback."""
-    import base64
-    import json
-    
+    """Create a properly signed JWT with issuer, audience, expiration, and token type metadata."""
     to_encode = data.copy()
-    if expires_delta:
-        expire = datetime.now(timezone.utc) + expires_delta
-    else:
-        expire = datetime.now(timezone.utc) + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-        
-    to_encode.update({"exp": int(expire.timestamp())})
-    
-    header = {"alg": settings.ALGORITHM, "typ": "JWT"}
-    
-    encoded_header = base64.urlsafe_b64encode(json.dumps(header).encode()).decode().rstrip("=")
-    encoded_payload = base64.urlsafe_b64encode(json.dumps(to_encode).encode()).decode().rstrip("=")
-    
-    signature_input = f"{encoded_header}.{encoded_payload}"
-    signature = hmac.new(settings.SECRET_KEY.encode(), signature_input.encode(), hashlib.sha256).hexdigest()
-    
-    return f"{signature_input}.{signature}"
+    expire = datetime.now(timezone.utc) + (expires_delta or timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES))
+    to_encode.update({
+        "exp": expire,
+        "iat": datetime.now(timezone.utc),
+        "iss": settings.JWT_ISSUER,
+        "aud": settings.JWT_AUDIENCE,
+        "token_type": "access",
+    })
+    return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+
 
 def decode_access_token(token: str) -> Optional[Dict[str, Any]]:
-    """Decode and verify signed JWT token."""
-    import base64
-    import json
-    
+    """Decode and validate the signed JWT, rejecting expired, malformed, or mismatched tokens."""
+    if not token:
+        return None
     try:
-        parts = token.split(".")
-        if len(parts) != 3:
+        payload = jwt.decode(
+            token,
+            settings.SECRET_KEY,
+            algorithms=[settings.ALGORITHM],
+            audience=settings.JWT_AUDIENCE,
+            issuer=settings.JWT_ISSUER,
+            options={"require": ["exp", "iat", "iss", "aud", "token_type"]},
+        )
+        if payload.get("token_type") != "access":
             return None
-            
-        signature_input = f"{parts[0]}.{parts[1]}"
-        expected_sig = hmac.new(settings.SECRET_KEY.encode(), signature_input.encode(), hashlib.sha256).hexdigest()
-        
-        if not hmac.compare_digest(parts[2], expected_sig):
-            return None
-            
-        padded_payload = parts[1] + "=" * (-len(parts[1]) % 4)
-        payload = json.loads(base64.urlsafe_b64decode(padded_payload.encode()).decode())
-        
-        # Check expiry
-        if payload.get("exp") and payload["exp"] < datetime.now(timezone.utc).timestamp():
-            return None
-            
         return payload
-    except Exception:
+    except (jwt.ExpiredSignatureError, jwt.InvalidTokenError, jwt.InvalidAudienceError, jwt.InvalidIssuerError):
         return None

@@ -69,7 +69,7 @@ def register_user(payload: UserRegisterRequest):
     pw_hash = hash_password(payload.password)
     now = datetime.now(timezone.utc).isoformat()
     # Privileged roles start unapproved; Public/Researcher auto-approved
-    is_approved = 0 if requested in PRIVILEGED_ROLES else 1
+    is_approved = requested not in PRIVILEGED_ROLES
     assigned_role = requested if requested not in PRIVILEGED_ROLES else "Public"
 
     cursor.execute(
@@ -145,10 +145,7 @@ def request_role_upgrade(
     payload: RoleUpgradeRequest,
     user: CurrentUser = Depends(get_current_user_from_token_or_header),
 ):
-    """
-    Request a role upgrade (e.g. Public → Researcher, Researcher → Institution).
-    Administrators process these via the admin panel.
-    """
+    """Create a persisted role-upgrade request for admin review."""
     valid_roles = {r.value for r in UserRole}
     if payload.requested_role not in valid_roles:
         raise HTTPException(status_code=400, detail=f"Invalid role. Valid roles: {valid_roles}")
@@ -160,13 +157,26 @@ def request_role_upgrade(
     cursor = conn.cursor()
     request_id = str(uuid.uuid4())
     now = datetime.now(timezone.utc).isoformat()
+    justification = (payload.justification or "").strip()
 
+    cursor.execute(
+        """
+        INSERT INTO role_requests (id, user_id, requested_role, justification, status, created_at)
+        VALUES (?, ?, ?, ?, 'Pending', ?)
+        """,
+        (request_id, user.user_id, payload.requested_role, justification, now),
+    )
     cursor.execute(
         """
         INSERT INTO background_jobs (id, job_type, status, progress_pct, error_log, created_at, updated_at)
         VALUES (?, 'Role_Upgrade_Request', 'Pending', 0.0, ?, ?, ?)
         """,
-        (request_id, f"user:{user.user_id}|requested:{payload.requested_role}|justification:{payload.justification}", now, now),
+        (
+            request_id,
+            f"user:{user.user_id}|requested:{payload.requested_role}|justification:{justification}",
+            now,
+            now,
+        ),
     )
     conn.commit()
     conn.close()
@@ -178,20 +188,121 @@ def request_role_upgrade(
     }
 
 
-@router.get("/pending-approvals", summary="List pending role upgrade requests [Admin only]")
-def list_pending_approvals(user: CurrentUser = Depends(require_role(UserRole.ADMINISTRATOR))):
-    """Administrator endpoint: list all pending role upgrade requests."""
+@router.get("/pending-approvals", summary="List pending role upgrade requests [Government Official+]")
+def list_pending_approvals(user: CurrentUser = Depends(require_role(UserRole.GOV_OFFICIAL))):
+    """Government Official or Administrator review endpoint for pending role upgrade requests."""
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute(
-        "SELECT id, error_log, created_at FROM background_jobs WHERE job_type = 'Role_Upgrade_Request' AND status = 'Pending'"
+        """
+        SELECT rr.id, rr.user_id, rr.requested_role, rr.justification, rr.created_at,
+               u.email, u.full_name
+        FROM role_requests rr
+        JOIN users u ON u.id = rr.user_id
+        WHERE rr.status = 'Pending'
+        ORDER BY rr.created_at ASC
+        """
     )
     rows = cursor.fetchall()
     conn.close()
 
     return {
         "pending_requests": [
-            {"request_id": r["id"], "details": r["error_log"], "submitted_at": r["created_at"]}
+            {
+                "request_id": r["id"],
+                "user_id": r["user_id"],
+                "email": r["email"],
+                "full_name": r["full_name"],
+                "requested_role": r["requested_role"],
+                "justification": r["justification"],
+                "submitted_at": r["created_at"],
+            }
             for r in rows
         ]
+    }
+
+
+@router.post("/role-requests/{request_id}/approve", summary="Approve a role upgrade request [Government Official+]")
+def approve_role_request(
+    request_id: str,
+    user: CurrentUser = Depends(require_role(UserRole.GOV_OFFICIAL)),
+):
+    """Approve a pending role request and update the user's current role."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT id, user_id, requested_role, justification FROM role_requests WHERE id = ? AND status = 'Pending'",
+        (request_id,),
+    )
+    row = cursor.fetchone()
+    if not row:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Pending role request not found.")
+
+    requested_role = row["requested_role"]
+    valid_roles = {r.value for r in UserRole}
+    if requested_role not in valid_roles:
+        conn.close()
+        raise HTTPException(status_code=400, detail=f"Invalid requested role: {requested_role}")
+
+    cursor.execute(
+        "UPDATE users SET role = ?, is_approved = ? WHERE id = ?",
+        (requested_role, True, row["user_id"]),
+    )
+    reviewed_at = datetime.now(timezone.utc).isoformat()
+    cursor.execute(
+        "UPDATE role_requests SET status = 'Approved', reviewer_user_id = ?, reviewed_at = ?, decision_note = ? WHERE id = ?",
+        (user.user_id, reviewed_at, f"Approved by {user.email}", request_id),
+    )
+    cursor.execute(
+        "UPDATE background_jobs SET status = 'Completed', progress_pct = 100.0, error_log = ?, updated_at = ? WHERE id = ?",
+        (f"approved:{requested_role}|reviewer:{user.email}|user:{row['user_id']}", reviewed_at, request_id),
+    )
+    conn.commit()
+    conn.close()
+
+    return {
+        "status": "approved",
+        "request_id": request_id,
+        "user_id": row["user_id"],
+        "approved_role": requested_role,
+        "reviewed_by": user.user_id,
+    }
+
+
+@router.post("/role-requests/{request_id}/reject", summary="Reject a role upgrade request [Government Official+]")
+def reject_role_request(
+    request_id: str,
+    user: CurrentUser = Depends(require_role(UserRole.GOV_OFFICIAL)),
+):
+    """Reject a pending role request without updating the user's role."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT id, user_id, requested_role FROM role_requests WHERE id = ? AND status = 'Pending'",
+        (request_id,),
+    )
+    row = cursor.fetchone()
+    if not row:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Pending role request not found.")
+
+    reviewed_at = datetime.now(timezone.utc).isoformat()
+    cursor.execute(
+        "UPDATE role_requests SET status = 'Rejected', reviewer_user_id = ?, reviewed_at = ?, decision_note = ? WHERE id = ?",
+        (user.user_id, reviewed_at, f"Rejected by {user.email}", request_id),
+    )
+    cursor.execute(
+        "UPDATE background_jobs SET status = 'Rejected', progress_pct = 100.0, error_log = ?, updated_at = ? WHERE id = ?",
+        (f"rejected:{row['requested_role']}|reviewer:{user.email}|user:{row['user_id']}", reviewed_at, request_id),
+    )
+    conn.commit()
+    conn.close()
+
+    return {
+        "status": "rejected",
+        "request_id": request_id,
+        "user_id": row["user_id"],
+        "requested_role": row["requested_role"],
+        "reviewed_by": user.user_id,
     }

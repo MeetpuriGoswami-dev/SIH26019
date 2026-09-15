@@ -10,6 +10,7 @@ Architecture v2.1:
 - Services (OCR, Storage): app/services/*
 """
 
+import os
 from fastapi import FastAPI, HTTPException, Query, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
@@ -49,6 +50,20 @@ from engine.kb_view import render_knowledge_base_html
 from engine.innovation_view import render_innovation_html
 from engine.gov_portal_view import render_gov_portal_html
 
+_default_allowed_origins = [
+    "http://localhost:3000",
+    "http://localhost:5173",
+    "http://127.0.0.1:3000",
+    "http://127.0.0.1:5173",
+]
+allowed_origins = os.getenv("ALLOWED_ORIGINS")
+if allowed_origins:
+    cors_origins = [origin.strip() for origin in allowed_origins.split(",") if origin.strip()]
+elif settings.ENVIRONMENT.lower() == "production":
+    cors_origins = []
+else:
+    cors_origins = _default_allowed_origins
+
 app = FastAPI(
     title="Bhumi-Niti (भूमि-नीति) National Core API",
     description=(
@@ -63,7 +78,7 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -74,6 +89,29 @@ app.add_middleware(
 def on_startup():
     """Initialize all database tables on server start."""
     init_db()
+
+
+@app.get("/health/readiness", tags=["Operations"])
+def readiness_check():
+    """Report whether the configured database can serve application traffic."""
+    conn = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT 1 AS ready")
+        row = cursor.fetchone()
+        if not row:
+            raise RuntimeError("database did not return a readiness result")
+        return {
+            "status": "ready",
+            "environment": settings.ENVIRONMENT,
+            "database": "postgresql" if settings.DATABASE_URL.startswith(("postgres://", "postgresql://")) else "sqlite",
+        }
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=f"Database is not ready: {exc}") from exc
+    finally:
+        if conn is not None:
+            conn.close()
 
 
 # =============================================================================
@@ -145,7 +183,7 @@ def register_user(payload: UserRegisterRequest):
     user_id = str(uuid.uuid4())
     pw_hash = hash_password(payload.password)
     now = datetime.now(timezone.utc).isoformat()
-    is_approved = 0 if requested in PRIVILEGED_ROLES else 1
+    is_approved = requested not in PRIVILEGED_ROLES
     assigned_role = requested if requested not in PRIVILEGED_ROLES else "Public"
 
     cursor.execute(
@@ -354,16 +392,20 @@ def api_get_grounded_ai_query(query: str = Query(...), location: str = Query(...
 # EXTENDED API ROUTERS — Workspaces, Innovation, Analytics, Documents, Simulation
 # =============================================================================
 
+from app.api.routes.auth import router as auth_router
 from app.api.routes.workspaces import router as workspaces_router
 from app.api.routes.innovation import router as innovation_router
 from app.api.routes.analytics import router as analytics_router
 from app.api.routes.documents import router as documents_router
+from app.api.routes.locations import router as locations_router
 from app.api.routes.simulation import router as simulation_ext_router
 
+app.include_router(auth_router)
 app.include_router(workspaces_router)
 app.include_router(innovation_router)
 app.include_router(analytics_router)
 app.include_router(documents_router)
+app.include_router(locations_router)
 app.include_router(simulation_ext_router)
 
 
@@ -374,21 +416,30 @@ app.include_router(simulation_ext_router)
 @app.get("/knowledge-base", response_class=HTMLResponse, tags=["Frontend"])
 def knowledge_base_ui():
     """Land Governance Knowledge Base Portal UI."""
-    return render_knowledge_base_html()
+    return HTMLResponse(
+        content=render_knowledge_base_html(),
+        headers={"Cache-Control": "no-store, no-cache, must-revalidate, max-age=0"},
+    )
 
 
 @app.get("/innovation-hub", response_class=HTMLResponse, tags=["Frontend"])
 @app.get("/innovation", response_class=HTMLResponse, tags=["Frontend"])
 def innovation_ui():
     """DoLR Innovation Hub & Challenges Portal UI."""
-    return render_innovation_html()
+    return HTMLResponse(
+        content=render_innovation_html(),
+        headers={"Cache-Control": "no-store, no-cache, must-revalidate, max-age=0"},
+    )
 
 
 @app.get("/map", response_class=HTMLResponse, tags=["Frontend"])
 @app.get("/", response_class=HTMLResponse, tags=["Frontend"])
 def index_ui():
     """GIGW 3.0 National Geoportal Executive Dashboard (MapLibre GL JS)."""
-    return render_gov_portal_html()
+    return HTMLResponse(
+        content=render_gov_portal_html(),
+        headers={"Cache-Control": "no-store, no-cache, must-revalidate, max-age=0"},
+    )
 
 
 if __name__ == "__main__":

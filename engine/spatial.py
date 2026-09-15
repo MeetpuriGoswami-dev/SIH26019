@@ -30,65 +30,6 @@ def query_live_spatial_footprint(lat: float, lon: float, radius_km: float = 3.5)
         if now - cached_time < 300: # 5 min TTL
             return cached_val
 
-    # Instant Spatial Profiles for National Multi-State Demonstration (Req 7 & 10)
-    if abs(lat - 28.535) < 0.05 and abs(lon - 77.391) < 0.05:
-        return {
-            "dominant_land_use": "Urban / Industrial SEZ & IT Corridors (61.4%)",
-            "vegetation_cover_pct": "18.2%",
-            "agricultural_proportion_pct": "24.2%",
-            "water_body_footprint_pct": "9.6%",
-            "distribution": {
-                "Commercial & Industrial": "42.8%",
-                "Residential Sectors": "28.6%",
-                "Farmland / Peri-urban": "24.2%",
-                "Yamuna/Hindon Water Basin": "9.6%"
-            },
-            "forest_ecology": {
-                "is_protected": True,
-                "protected_entities": ["Okhla Bird Sanctuary (100m ESZ Buffer)", "Yamuna Floodplain Zone"],
-                "forest_clusters": ["City Forest Noida Sector 62", "Surajpur Wetland Buffer"]
-            },
-            "server": "pre-indexed-bhuvan-lulc"
-        }
-    if abs(lat - 18.520) < 0.05 and abs(lon - 73.856) < 0.05:
-        return {
-            "dominant_land_use": "Metropolitan Urban & IT Clusters (58.3%)",
-            "vegetation_cover_pct": "34.5%",
-            "agricultural_proportion_pct": "28.7%",
-            "water_body_footprint_pct": "7.2%",
-            "distribution": {
-                "Residential & Commercial": "45.1%",
-                "IT Park & Industrial": "23.2%",
-                "Agricultural / Orchards": "28.7%",
-                "Mula-Mutha Riverbed": "7.2%"
-            },
-            "forest_ecology": {
-                "is_protected": False,
-                "protected_entities": [],
-                "forest_clusters": ["Vetal Tekdi Hill Reserve", "Taljai Hills Forest Reserve"]
-            },
-            "server": "pre-indexed-bhuvan-lulc"
-        }
-    if abs(lat - 21.1333) < 0.1 and abs(lon - 70.5833) < 0.1:
-        return {
-            "dominant_land_use": "Protected Forest & Wildlife Sanctuary Core (88.4%)",
-            "vegetation_cover_pct": "84.2%",
-            "agricultural_proportion_pct": "8.1%",
-            "water_body_footprint_pct": "3.3%",
-            "distribution": {
-                "Protected Dense Forest / Woodland": "76.2%",
-                "Vidi / Scrub / Eco-Buffer": "12.2%",
-                "Agricultural (Peripheral)": "8.1%",
-                "Reservoirs & Rivers (Hiran/Kamleshwar)": "3.5%"
-            },
-            "forest_ecology": {
-                "is_protected": True,
-                "protected_entities": ["Gir National Park & Wildlife Sanctuary (Core ESZ Zone)"],
-                "forest_clusters": ["Gir East Forest Division", "Gir West Sanctuary Reserve"]
-            },
-            "server": "pre-indexed-bhuvan-lulc"
-        }
-
     # Calculate bounding box from radius
     lat_deg = radius_km / 111.0
     lon_deg = radius_km / (111.0 * math.cos(math.radians(lat)))

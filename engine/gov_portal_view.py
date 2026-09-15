@@ -2918,6 +2918,7 @@ def render_gov_portal_html() -> str:
 
       applyPersonaUI(savedPersona);
       initAiProviderSettings();
+      refreshReadinessStatus();
 
       // Auto-load default location so intelligence dossier & AI Assistant are active immediately
       setTimeout(() => {
@@ -2930,6 +2931,18 @@ def render_gov_portal_html() -> str:
       applyPersonaUI(role);
       if (currentDossierData) {
         renderExecutiveDashboard(currentDossierData);
+      }
+    }
+
+    async function refreshReadinessStatus() {
+      const statusEl = document.getElementById("headerStatusText");
+      try {
+        const response = await fetch("/health/readiness");
+        if (!response.ok) throw new Error("readiness unavailable");
+        const readiness = await response.json();
+        if (statusEl) statusEl.textContent = `System ready | ${readiness.database.toUpperCase()}`;
+      } catch (error) {
+        if (statusEl) statusEl.textContent = "System readiness unavailable";
       }
     }
 

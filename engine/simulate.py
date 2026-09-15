@@ -45,6 +45,16 @@ def run_policy_simulation(
 
     # Check Hard Legal Constraint 2: Protected Forest / Core ESZ
     forest = spatial.get("forest_ecology", {})
+    # A canonical result explicitly identified as a national park is itself a
+    # protected-area signal when the live perimeter feed is temporarily empty.
+    official_name = str(geo.get("official_name", ""))
+    if "national park" in official_name.lower() and not forest.get("is_protected"):
+        forest = {
+            **forest,
+            "is_protected": True,
+            "protected_entities": forest.get("protected_entities") or [official_name],
+        }
+        spatial["forest_ecology"] = forest
     if forest.get("is_protected"):
         hard_constraints_triggered.append("Notified Wildlife Sanctuary / Protected Forest Core Zone: Commercial development prohibited under Wildlife Protection Act.")
         score = 0.0
