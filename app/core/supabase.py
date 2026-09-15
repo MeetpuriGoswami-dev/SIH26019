@@ -55,6 +55,7 @@ CREATE TABLE IF NOT EXISTS public.users (
     full_name TEXT NOT NULL,
     role TEXT NOT NULL DEFAULT 'Public',
     is_approved BOOLEAN DEFAULT TRUE,
+    account_status TEXT NOT NULL DEFAULT 'active',
     org_id UUID,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -177,6 +178,7 @@ CREATE TABLE IF NOT EXISTS public.documents (
     source_url TEXT,
     file_path TEXT,
     checksum TEXT,
+    owner_user_id UUID REFERENCES public.users(id),
     is_public BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -190,6 +192,9 @@ CREATE TABLE IF NOT EXISTS public.document_chunks (
     content_text TEXT NOT NULL,
     embedding VECTOR(1536)
 );
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_document_chunks_document_index
+    ON public.document_chunks (document_id, chunk_index);
 
 CREATE TABLE IF NOT EXISTS public.document_versions (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -452,9 +457,14 @@ CREATE TABLE IF NOT EXISTS public.background_jobs (
     status TEXT NOT NULL DEFAULT 'Pending',
     progress_pct DOUBLE PRECISION DEFAULT 0.0,
     error_log TEXT,
+    owner_user_id UUID REFERENCES public.users(id),
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS account_status TEXT NOT NULL DEFAULT 'active';
+ALTER TABLE public.documents ADD COLUMN IF NOT EXISTS owner_user_id UUID REFERENCES public.users(id);
+ALTER TABLE public.background_jobs ADD COLUMN IF NOT EXISTS owner_user_id UUID REFERENCES public.users(id);
 
 CREATE TABLE IF NOT EXISTS public.audit_events (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),

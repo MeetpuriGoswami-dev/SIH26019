@@ -166,6 +166,7 @@ def init_postgres_db():
         cursor.execute("""
         CREATE INDEX IF NOT EXISTS idx_document_chunks_embedding ON document_chunks USING hnsw (embedding vector_cosine_ops);
         """)
+        cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_document_chunks_document_index ON document_chunks (document_id, chunk_index);")
 
         # Simulation and workspace model
         cursor.execute("""

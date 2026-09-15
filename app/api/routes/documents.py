@@ -127,7 +127,7 @@ async def api_upload_document(
     # Create background ingestion job
     cursor.execute(
         """
-        INSERT INTO background_jobs (id, job_type, status, progress_pct, error_log, created_at, updated_at)
+        INSERT INTO background_jobs (id, job_type, status, progress_pct, error_log, owner_user_id, created_at, updated_at)
         VALUES (?, 'Doc_Ingestion', 'Pending', 0.0, ?, ?, ?, ?)
         """,
         (job_id, f"doc_id:{doc_id}", user.user_id, now, now),
@@ -162,15 +162,20 @@ def _ingest_document_sync(doc_id: str, job_id: str, file_path: str, file_bytes: 
         conn.commit()
 
         chunks = extract_text_from_file(file_bytes, content_type)
+        if not chunks:
+            raise ValueError("No text could be extracted from the uploaded document.")
 
         for idx, chunk in enumerate(chunks):
+            text = (chunk.get("text") or "").strip()
+            if not text:
+                continue
             chunk_id = str(uuid.uuid4())
             cursor.execute(
                 """
                 INSERT INTO document_chunks (id, document_id, chunk_index, section_title, page_number, content_text)
                 VALUES (?, ?, ?, ?, ?, ?)
                 """,
-                (chunk_id, doc_id, idx, chunk.get("section_title"), chunk.get("page_number"), chunk["text"]),
+                (chunk_id, doc_id, idx, chunk.get("section_title"), chunk.get("page_number"), text),
             )
 
         cursor.execute(

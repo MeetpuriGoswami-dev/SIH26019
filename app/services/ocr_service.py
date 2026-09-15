@@ -40,7 +40,7 @@ def _extract_from_pdf(file_bytes: bytes) -> List[Dict[str, Any]]:
             try:
                 from PyPDF2 import PdfReader
             except ImportError:
-                return _fallback_chunk(file_bytes.decode("utf-8", errors="replace"))
+                return []
 
         reader = PdfReader(io.BytesIO(file_bytes))
         chunks = []
@@ -71,10 +71,10 @@ def _extract_from_pdf(file_bytes: bytes) -> List[Dict[str, Any]]:
                     "chunk_index": len(chunks),
                 })
 
-        return chunks if chunks else _fallback_chunk("PDF extraction produced no text content.")
+        return chunks
 
     except Exception as e:
-        return _fallback_chunk(f"PDF extraction error: {str(e)}")
+        return []
 
 
 def _ocr_scanned_pdf_page(page, page_num: int) -> str:
@@ -99,7 +99,7 @@ def _ocr_scanned_pdf_page(page, page_num: int) -> str:
                 return "\n".join(ocr_texts)
     except Exception:
         pass
-    return f"[Scanned Page {page_num}: OCR text extraction processed]"
+    return ""
 
 
 
@@ -172,5 +172,3 @@ def _detect_section_heading(text: str) -> str:
     return None
 
 
-def _fallback_chunk(text: str) -> List[Dict[str, Any]]:
-    return [{"text": text[:2000], "section_title": None, "page_number": None, "chunk_index": 0}]
